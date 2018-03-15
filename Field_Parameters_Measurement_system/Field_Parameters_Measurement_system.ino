@@ -5,52 +5,75 @@
 #define DEBUG
 
 #define ANALOG_MOISTURE_SENSOR_PIN A0
+
 #define ANALOG_SUNLIGHT_SENSOR_PIN A1
+
 #define REF_3V3 A2 //3.3V power on the Arduino board
+
 #define ANALOG_PH_SENSOR_PIN A3
+
 #define PH_OFF_SET 0
+
 #define DHTPIN                      4 //pin for the digital temprature and humidity sensor
+
 #define DHTTYPE                     DHT11 // type of dhtxx series to be used
 
 #define WIRE_PROTOCOL_ADDRESS 0xB1
 
 int moisture_sensor_analog_value;
+
 float relative_moisture_level;
+
 float ultraviolet_intensity_value;
+
 float pH_sensor_value;
-float humidity;
+
+float humidity; // humidity value from the dht11 sensor
+
 float dht11temp; // temprature value from the dht11 sensor
 
 /**
- * declaring objects for the sensors
+ * declaring objects for the sensors and initializing the DHT object that will be used to access the respective functionality of the sensor
  */
 DHT dht11(DHTPIN,DHTTYPE );
 
 void setup() {
 
   #ifdef DEBUG
+  
     Serial.begin(9600);
+    
     Serial.println("Field Parameters Measurement System");
+    
   #endif
   
-  Wire.begin(WIRE_PROTOCOL_ADDRESS);
-  Wire.onRequest(requestEvent);
+  Wire.begin(WIRE_PROTOCOL_ADDRESS); //Initialize the I2C protocols by joining to the network as a slave with the given address WIRE_PROTOCOL_ADDRESS
+  
+  Wire.onRequest(requestEvent); // This registers a function to be called when data is requested on the I2C wire protocol
 
   pinMode(ANALOG_MOISTURE_SENSOR_PIN, INPUT);
+  
   pinMode(ANALOG_SUNLIGHT_SENSOR_PIN, INPUT);
+  
   pinMode(REF_3V3, INPUT);
+  
   pinMode(ANALOG_PH_SENSOR_PIN, INPUT);
   
 }
 
 void loop() {
 
-  dht11temp = readDHT11Temp(dht11);
-  humidity = readDHT11Humidity(dht11);
-  moisture_sensor_analog_value = readSoilMoisture(ANALOG_MOISTURE_SENSOR_PIN);
-  relative_moisture_level = mapFloat(moisture_sensor_analog_value, 0, 1023, 0, 10);
-  ultraviolet_intensity_value = readUVlight(ANALOG_SUNLIGHT_SENSOR_PIN, REF_3V3);
-  pH_sensor_value = readpHValue(ANALOG_PH_SENSOR_PIN);
+  dht11temp = readDHT11Temp(dht11); //read the dht11 sensor values for temprature
+  
+  humidity = readDHT11Humidity(dht11);//read the dht11 sensor values for humidity
+  
+  moisture_sensor_analog_value = readSoilMoisture(ANALOG_MOISTURE_SENSOR_PIN); //read the value for the soil moisture
+  
+  relative_moisture_level = mapFloat(moisture_sensor_analog_value, 0, 1023, 0, 10); //convert the read value for the soil moisture to the relative value that is comparable
+  
+  ultraviolet_intensity_value = readUVlight(ANALOG_SUNLIGHT_SENSOR_PIN, REF_3V3); //read the UV light intensity values
+  
+  pH_sensor_value = readpHValue(ANALOG_PH_SENSOR_PIN); // read the ph sensor values
 
   #ifdef DEBUG
     Serial.print("Moisture : ");
@@ -68,24 +91,33 @@ void loop() {
 }
 
 float readDHT11Temp (DHT dht){
+  
   return dht.readTemperature();
+  
 }
 
 float readDHT11Humidity(DHT dht){
+  
   return dht.readHumidity();
+  
 }
 
 int readSoilMoisture(int moisture_pin) {
+  
   return analogRead(moisture_pin);
+  
 }
 
-float mapFloat(float x, float in_min, float in_max, float out_max,
-    float out_min) {
+float mapFloat(float x, float in_min, float in_max, float out_max, float out_min) {
+  
   return (x - in_min) * (out_max - out_min) / (in_max - in_min);
+  
 }
 
 float readUVlight(int uv_sensor_pin, int ref_3v3_pin) {
+  
   int uvLevel = analogRead(uv_sensor_pin);
+  
   int reference = analogRead(ref_3v3_pin);
 
   float outputVoltage = 3.3 / reference * uvLevel;
@@ -101,14 +133,24 @@ float readUVlight(int uv_sensor_pin, int ref_3v3_pin) {
 }
 
 float readpHValue(int ph_sensor_pin) {
+  
   float analogVoltage = analogRead(ph_sensor_pin) * 5.0 / 1024;
+  
   return analogVoltage * 3.5 * PH_OFF_SET;
+  
 }
 
 void requestEvent(){
+  
   #ifdef DEBUG
-    Serial.println("Sending the information");
+    Serial.println("Sending the information"); // Only executed when it is compiled with the #define DEBUG is uncommented
   #endif
+
+  /**
+   * Now write the corresponding data to the wire that has been requested by the controll 
+   * room arduino, data for ph, moisture, uv, temprature, humidity.
+   */
+  
   Wire.write("PHV");
   String pHString = String(pH_sensor_value);
   Wire.write(pHString.c_str());
@@ -130,6 +172,7 @@ void requestEvent(){
   Wire.write("HUM:");
   Wire.write(((String)humidity).c_str());
   Wire.write(':');
+  
 }
 
 
