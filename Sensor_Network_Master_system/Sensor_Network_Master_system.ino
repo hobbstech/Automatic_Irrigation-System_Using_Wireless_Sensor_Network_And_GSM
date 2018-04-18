@@ -5,7 +5,7 @@
 
 #define ENVIROMENT_ARDUINO_STARTING_ADDRESS 0xB0
 
-#define ENVIROMENT_BYTES_TO_RECEIVE 50
+#define ENVIROMENT_BYTES_TO_RECEIVE 35
 
 #define RADIO_TRANSMIT_PIN 12
 
@@ -13,7 +13,7 @@
 
 #define RADIO_TRANSMIT_ENABLE_PIN 3
 
-#define NUMBER_OF_SLAVES 2
+#define NUMBER_OF_SLAVES 1
 
 void setup() {
   Wire.begin();
@@ -22,66 +22,68 @@ void setup() {
     Serial.begin(9600);
   #endif
 
+  vw_set_ptt_inverted(true); 
+
   // Initialise the IO and ISR
   vw_set_tx_pin(RADIO_TRANSMIT_PIN); //set the radio transmit pin for the virtua; wire communication protocol
   
-  vw_set_rx_pin(RADIO_RECEIVE_PIN); //set the radio transmit pin for the virtua; wire communication protocol
+  //vw_set_rx_pin(RADIO_RECEIVE_PIN); //set the radio transmit pin for the virtua; wire communication protocol
   
   vw_set_ptt_pin(RADIO_TRANSMIT_ENABLE_PIN); // Required for DR3100
   
-  vw_setup(2000); //Bits per second baudrate
+  vw_setup(4000); //Bits per second baudrate
   
 }
 
 char wireReceivingBuffer[ENVIROMENT_BYTES_TO_RECEIVE];
 
-float average_moisture;
+float average_moisture = 0;
 
-float total_moisture_values;
+float total_moisture_values = 0;
 
-float average_ph;
+float average_ph = 0;
 
-float total_ph_values;
+float total_ph_values = 0;
 
-float average_uv_intensity;
+float average_uv_intensity = 0;
 
-float total_uv_intensity;
+float total_uv_intensity = 0;
 
-float average_temprature;
+float average_temprature = 0;
 
-float total_temprature_value;
+float total_temprature_value = 0;
 
-float average_humidity;
+float average_humidity = 0;
 
-float total_humidity_values;
+float total_humidity_values = 0;
 
-int count;
+int count = 0;
 
 void loop() {
 
-  /**
-   * Initializing the variables
-   */
-
-  average_moisture = 0;
-  
-  total_moisture_values = 0;
-  
-  average_ph = 0;
-  
-  total_ph_values = 0;
-  
-  average_uv_intensity  = 0;
-  
-  total_uv_intensity = 0;
-  
-  average_temprature = 0;
-  
-  total_temprature_value = 0;
-  
-  average_humidity = 0;
-  
-  total_humidity_values = 0;
+//  /**
+//   * Initializing the variables
+//   */
+//
+//  average_moisture = 0;
+//  
+//  total_moisture_values = 0;
+//  
+//  average_ph = 0;
+//  
+//  total_ph_values = 0;
+//  
+//  average_uv_intensity  = 0;
+//  
+//  total_uv_intensity = 0;
+//  
+//  average_temprature = 0;
+//  
+//  total_temprature_value = 0;
+//  
+//  average_humidity = 0;
+//  
+//  total_humidity_values = 0;
 
   /**
    * Poll through each slave that has been connected to the master and get its enviromental readings, and add them to respective sums
@@ -89,7 +91,7 @@ void loop() {
 
   for(int slaveIndex = 0; slaveIndex < NUMBER_OF_SLAVES; slaveIndex++){
     
-    char * p = requestFromSlave(ENVIROMENT_BYTES_TO_RECEIVE, ENVIROMENT_ARDUINO_STARTING_ADDRESS + slaveIndex);
+    char * p = requestFromSlave(ENVIROMENT_BYTES_TO_RECEIVE, ENVIROMENT_ARDUINO_STARTING_ADDRESS + slaveIndex + 1);
 
     //populating the array
     for(int i = 0; i < ENVIROMENT_BYTES_TO_RECEIVE; i++){
@@ -158,7 +160,11 @@ void loop() {
   #ifdef DEBUG
     Serial.println("Message sent to the receiver");
     Serial.println(parameterDetails);
+    Serial.println("****************************************************");
   #endif
+
+
+  delay(5000);
   
 }
 
@@ -170,7 +176,7 @@ float readTemprature(char buff[]){
 
   String buffString = String(buff);
   
-  return buffString.substring((buffString.indexOf("TEM")+3), buffString.indexOf('<'))
+  return buffString.substring((buffString.indexOf("T")+1), buffString.indexOf('<'))
               .toFloat();
   
 }
@@ -179,7 +185,7 @@ float readMoisture(char buff[]){
   
   String buffString = String(buff);
   
-  return buffString.substring((buffString.indexOf("MOI")+3), buffString.indexOf(';'))
+  return buffString.substring((buffString.indexOf("M")+1), buffString.indexOf(';'))
               .toFloat();
               
 }
@@ -188,7 +194,7 @@ float readPH(char buff[]){
   
   String buffString = String(buff);
   
-  return buffString.substring((buffString.indexOf("PHV")+3), buffString.indexOf('?'))
+  return buffString.substring((buffString.indexOf("P")+1), buffString.indexOf('?'))
               .toInt();
               
 }
@@ -197,7 +203,7 @@ float readUV(char buff[]){
   
   String buffString = String(buff);
   
-  return buffString.substring((buffString.indexOf("UVI")+3), buffString.indexOf('>'))
+  return buffString.substring((buffString.indexOf("U")+1), buffString.indexOf('>'))
               .toInt();
 }
 
@@ -205,7 +211,7 @@ float readHumidity(char buff[]){
   
   String buffString = String(buff);
   
-  return buffString.substring((buffString.indexOf("HUM")+3), buffString.indexOf(':'))
+  return buffString.substring((buffString.indexOf("H")+1), buffString.indexOf(':'))
               .toInt();
               
 }
@@ -231,8 +237,9 @@ char* requestFromSlave(int bytesToReceive, int slaveAddress){
   }
 
   #ifdef DEBUG
-    Serial.print("Values from Slave ");
-    Serial.print(slaveAddress);
+    Serial.print("Values from Slave :");
+    Serial.println(slaveAddress);
+    Serial.print("\t");
     Serial.println(receivingBuffer);
   #endif
   

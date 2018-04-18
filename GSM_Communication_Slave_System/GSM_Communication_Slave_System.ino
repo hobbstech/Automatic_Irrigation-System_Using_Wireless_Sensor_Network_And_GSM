@@ -2,7 +2,7 @@
 #include <sms.h>
 #include <Wire.h>
 
-#define DEBUG
+//#define DEBUG
 
 #define first_authorized_pos       1
 #define last_authorized_pos        10
@@ -30,6 +30,8 @@ void setup() {
     else
       Serial.println("\nstatus : IDLE\n");
   #endif
+if(started)
+  sms.SendSMS(ownerNumber, "System Started Successfully"); //send the given message to the given number
 }
 
 void loop() {
