@@ -1,19 +1,27 @@
 #include <Wire.h>
-#include <VirtualWire.h>
 #include "SPI.h"
 #include "Adafruit_GFX.h"
 #include "Adafruit_ILI9340.h"
 #include <SD.h>
+#include <SoftwareSerial.h>
+#include <SIM900.h>
+#include <sms.h>
+
+#define message_length             60
+#define GSM_COMM_SYSTEM_ADDRESS    0xC1
+
+SMSGSM sms;
+
+char message[160];
+char ownerNumber[] = "0778831917"; //the number for the receipient
 
 #define DEBUG
 
 #define GSM_COMM_SYSTEM_ADDRESS 0xC1
 
-#define RADIO_TRANSMIT_PIN 12
+#define BT_TRANSMIT_PIN 3
 
-#define RADIO_RECEIVE_PIN 2
-
-#define RADIO_TRANSMIT_ENABLE_PIN 3
+#define BT_RECEIVE_PIN 2
 
 #define WATER_PUMP_RELAY_PIN 4
 
@@ -21,33 +29,30 @@
 
 #define GSM_MESSAGE_LENGTH 100
 
-#define _sclk 13
-#define _miso 12
-#define _mosi 11
-#define _cs 10
+#define _sclk 52
+#define _miso 50
+#define _mosi 51
+#define _cs 53
 #define _dc 9
 #define _rst 8
 #define _sd_cs 7
 
-#define BACKGROUND_COLOR ILI9340_BLACK
-#define FOREGROUND_COLOR ILI9340_WHITE
+#define BACKGROUND_COLOR ILI9340_WHITE
+#define FOREGROUND_COLOR ILI9340_BLACK
 
-#define MAXIMUM_VX_MESSAGE_LENGTH 100
+Adafruit_ILI9340 tft = Adafruit_ILI9340(_cs, _dc, _rst); //initialising the Adafruit TFT screen
 
-char vx_message[MAXIMUM_VX_MESSAGE_LENGTH];
 float _temprature;
 float _humidity;
 float _uv_intensity;
-float _moisture;
+int _moisture;
 float _ph;
 
 boolean water_pump_on = false;
 boolean previous_pump_state = false;
 boolean state_changed = false;
-float moisture_threshold;
+int moisture_threshold;
 char _gsm_message[GSM_MESSAGE_LENGTH];
-
-Adafruit_ILI9340 tft = Adafruit_ILI9340(_cs, _dc, _rst); //initialising the Adafruit TFT screen
 
 void setup() {
 
@@ -57,93 +62,110 @@ void setup() {
   
   pinMode(WATER_PUMP_RELAY_PIN, OUTPUT); //set the pin to which the water pump is connected to output mode
 
-  // Initialise the IO and ISR
-  vw_set_tx_pin(RADIO_TRANSMIT_PIN); //set the radio transmit pin for the virtua; wire communication protocol
-  
-  vw_set_rx_pin(RADIO_RECEIVE_PIN); //set the radio transmit pin for the virtua; wire communication protocol
-  
-  vw_set_ptt_pin(RADIO_TRANSMIT_ENABLE_PIN); // Required for DR3100
-  
-  vw_setup(2000); //Bits per second baudrate
-  
-  vw_rx_start();  //start receiver PLL running
+  Serial2.begin(9600);
 
   tft.begin(); //initialize the tft display 
-  
-  Serial.print("Testing Screen");
-  
-  Serial.println(testFillScreen());
-  
+ 
   tft.fillScreen(BACKGROUND_COLOR); //fill the tft screen with background color
   
   tft.setTextColor(FOREGROUND_COLOR);//fill the tft screen with foreground color
+
+  tft.setRotation(0);
   
   tft.setTextSize(2); //set the text size and font for the TFT display
 
   SD.begin(_sd_cs); //this initializes saving to the sd card
+
+  bool started = gsm.begin(2400);  //This initializes the GSM system with a baudrate of 2400 and returns true if the gsm is successfully started and has connected to the network
+ 
+  #ifdef DEBUG
   
+    if(started)
+    
+      Serial.println("\nstatus : READY\n");
+      
+    else
+    
+      Serial.println("\nstatus : IDLE\n");
+      
+  #endif
+  
+  if(started){
+    
+    sms.SendSMS(ownerNumber, "System Started Successfully"); //send the given message to the given number
+  
+  }
+
 }
 
+char bt_message[60];
+
 void loop() {
-
-  vw_wait_rx_max(60000); //set maximum waiting timefor the 433.3MHz transiver
-
+  
+  bool message_read = false;
+  int index = 0;
+  
   /**
-   * check if a message has been received by the virtual wire library, if so then read the 
-   * message into the vx_message array buffer, with a maxmum number of characters to be read
+   * check if a message has been received by the bluetooth system, if so then read the 
+   * message into the bt_message array buffer, with a maxmum number of characters to be read
    */
-  if(vw_have_message()){ 
+   while(Serial2.available()){
     
-    bool message_read = vw_get_message(vx_message, MAXIMUM_VX_MESSAGE_LENGTH);
+    bt_message[index] = Serial2.read();
+
+    index++;
+
+    message_read = true;
+    
+  }
+
+  if(message_read){
+
+    #ifdef DEBUG
+      Serial.println("*********************************************************");
+      Serial.println(bt_message);
+      Serial.println("*********************************************************");
+    #endif
     
   }
 
   /**
    * Read the respective values from the read message array
    */
-  _temprature = readTemprature(vx_message);
+  _temprature = readTemprature(bt_message);
   
-  _humidity = readHumidity(vx_message);
+  _humidity = readHumidity(bt_message);
   
-  _uv_intensity = readUV(vx_message);
+  _uv_intensity = readUV(bt_message);
   
-  _moisture = readMoisture(vx_message);
+  _moisture = readMoisture(bt_message);
   
-  _ph = readPH(vx_message);
+  _ph = readPH(bt_message);
 
-/**
- * Displaying to the TFT screen for Adafruit
- */
-  tft.setCursor(0, 0);
-  
-  tft.println("Field Parameter Measurements");
-  
-  tft.print("Temperature : ");
-  
-  tft.println(_temprature);
-  
-  tft.print("Humidity : ");
-  
-  tft.println(_humidity);
-  
-  tft.print("UV Intensity : ");
-  
-  tft.println(_uv_intensity);
-  
-  tft.print("Moisture Level : ");
-  
-  tft.println(_moisture);
-  
-  tft.print("Hydrogen Potential (ph) : ");
-  
-  tft.println(_ph);
+  #ifdef  DEBUG
+    Serial.print("Moisture : ");
+    Serial.println(_moisture);
+    Serial.print("Humidity : ");
+    Serial.println(_humidity);
+    Serial.print("UV Intensity : ");
+    Serial.println(_uv_intensity);
+    Serial.print("Hydrogen Potential (ph) : ");
+    Serial.println(_ph);
+    Serial.print("Temperature : ");
+    Serial.println(_temprature);
+  #endif
 
   /**
    * Water pump decision making
    */
-  moisture_threshold = mapFloat(analogRead(MOISTURE_THRESHOLD_LEVEL_PIN), 0, 1023, 0, 10); //read the value for threshhold water level from the variable resister acting as the control nob
+  moisture_threshold = analogRead(MOISTURE_THRESHOLD_LEVEL_PIN); //read the value for threshhold water level from the variable resister acting as the control nob
 
-  if(moisture_threshold < _moisture){
+  #ifdef DEBUG
+    Serial.print("Moisture Threshold : ");
+    Serial.println(moisture_threshold);
+  #endif
+
+  if(moisture_threshold > _moisture){
     
     water_pump_on = false;
     
@@ -191,14 +213,83 @@ void loop() {
       digitalWrite(WATER_PUMP_RELAY_PIN, LOW);
       
     }
-    
-    Wire.beginTransmission(GSM_COMM_SYSTEM_ADDRESS); //Begin I2C transmission to the GSM arduino system
-    
-    Wire.write(_gsm_message); //Write the message to be send to the GSM system
-    
-    Wire.endTransmission(); //End I2C transmission to the GSM arduino system
+
+    sms.SendSMS(ownerNumber, _gsm_message); //send the given message to the given number
             
   }
+  
+    delay(5000);
+
+     /**
+ * Displaying to the TFT screen for Adafruit
+ */
+ 
+  tft.fillScreen(BACKGROUND_COLOR);
+  
+  tft.setCursor(0, 0);
+
+  tft.setTextColor(ILI9340_BLUE);//fill the tft screen with foreground color
+  
+  tft.println("   Field Parameters");
+
+  tft.println();
+
+  tft.setTextColor(FOREGROUND_COLOR);//fill the tft screen with foreground color
+  
+  tft.print("Temp(C) : ");
+  
+  tft.println(_temprature);
+
+  tft.println();
+  
+  tft.print("Humid(%) : ");
+  
+  tft.println(_humidity);
+
+  tft.println();
+  
+  tft.print("UV(Index): ");
+  
+  tft.println(_uv_intensity);
+
+  tft.println();
+  
+  tft.print("Moist Act: ");
+  
+  tft.println(_moisture);
+
+  tft.println();
+  
+  tft.print("Soil pH : ");
+  
+  tft.println(_ph);
+
+  tft.println();
+
+  tft.print("Moist Thr: ");
+  
+  tft.println(moisture_threshold);
+
+  tft.println();
+
+  tft.print("Pump Status : ");
+
+  if(water_pump_on){
+
+    tft.println("ON");
+    
+  }else{
+    
+    tft.println("OFF");
+    
+  }
+  
+
+  tft.println();
+
+  tft.setTextColor(ILI9340_BLUE);//fill the tft screen with foreground color
+  
+  tft.println("  Grace @2018");
 
   /**
    * saving the field parameter data to sd card
@@ -231,35 +322,13 @@ void loop() {
   
   dataFile.close();
 
-  //Loop ending Here
+    Serial.println("********************************************************");
   
 }
 
 float mapFloat(float x, float in_min, float in_max, float out_max, float out_min) {
   
   return (x - in_min) * (out_max - out_min) / (in_max - in_min);
-  
-}
-
-/**
- * Testing the TFT screen, by filling with different colours
- */
-
-unsigned long testFillScreen() {
-  
-  unsigned long start = micros();
-  
-  tft.fillScreen(ILI9340_BLACK);
-  
-  tft.fillScreen(ILI9340_RED);
-  
-  tft.fillScreen(ILI9340_GREEN);
-  
-  tft.fillScreen(ILI9340_BLUE);
-  
-  tft.fillScreen(ILI9340_BLACK);
-  
-  return micros() - start;
   
 }
 
@@ -274,11 +343,11 @@ float readTemprature(char buff[]){
   
 }
 
-float readMoisture(char buff[]){
+int readMoisture(char buff[]){
   
   String buffString = String(buff);
   
-  return buffString.substring((buffString.indexOf("MOI")+3), buffString.indexOf(';')).toFloat();
+  return buffString.substring((buffString.indexOf("MOI")+3), buffString.indexOf(';')).toInt();
   
 }
 
@@ -286,7 +355,7 @@ float readPH(char buff[]){
   
   String buffString = String(buff);
   
-  return buffString.substring((buffString.indexOf("PHV")+3), buffString.indexOf('?')).toInt();
+  return buffString.substring((buffString.indexOf("PHV")+3), buffString.indexOf('?')).toFloat();
   
 }
 
@@ -294,7 +363,7 @@ float readUV(char buff[]){
   
   String buffString = String(buff);
   
-  return buffString.substring((buffString.indexOf("UVI")+3), buffString.indexOf('>')).toInt();
+  return buffString.substring((buffString.indexOf("UVI")+3), buffString.indexOf('>')).toFloat();
   
 }
 
@@ -302,5 +371,5 @@ float readHumidity(char buff[]){
   
   String buffString = String(buff);
   
-  return buffString.substring((buffString.indexOf("HUM")+3), buffString.indexOf(':')).toInt();
+  return buffString.substring((buffString.indexOf("HUM")+3), buffString.indexOf(':')).toFloat();
 }

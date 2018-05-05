@@ -4,8 +4,8 @@
 
 //#define DEBUG
 
-#define first_authorized_pos       1
-#define last_authorized_pos        10
+//#define first_authorized_pos       1
+//#define last_authorized_pos        10
 #define message_length             60
 #define GSM_COMM_SYSTEM_ADDRESS    0xC1
 

@@ -1,5 +1,6 @@
 #include <Wire.h>
 #include <VirtualWire.h>
+#include <SoftwareSerial.h>
 
 #define DEBUG
 
@@ -7,13 +8,13 @@
 
 #define ENVIROMENT_BYTES_TO_RECEIVE 35
 
-#define RADIO_TRANSMIT_PIN 12
+#define BT_TRANSMIT_PIN 3
 
-#define RADIO_RECEIVE_PIN 2
-
-#define RADIO_TRANSMIT_ENABLE_PIN 3
+#define BT_RECEIVE_PIN 2
 
 #define NUMBER_OF_SLAVES 1
+
+SoftwareSerial Bluetooth(BT_RECEIVE_PIN, BT_TRANSMIT_PIN);
 
 void setup() {
   Wire.begin();
@@ -22,16 +23,7 @@ void setup() {
     Serial.begin(9600);
   #endif
 
-  vw_set_ptt_inverted(true); 
-
-  // Initialise the IO and ISR
-  vw_set_tx_pin(RADIO_TRANSMIT_PIN); //set the radio transmit pin for the virtua; wire communication protocol
-  
-  //vw_set_rx_pin(RADIO_RECEIVE_PIN); //set the radio transmit pin for the virtua; wire communication protocol
-  
-  vw_set_ptt_pin(RADIO_TRANSMIT_ENABLE_PIN); // Required for DR3100
-  
-  vw_setup(4000); //Bits per second baudrate
+  Bluetooth.begin(9600);
   
 }
 
@@ -145,17 +137,13 @@ void loop() {
    * Sending information to the Control Room system through 433MHz radio Receiver
    */
 
-   String parameterDetails = "PHV" + String(average_ph) + "?MOI" + String(average_moisture) 
-                  + ";UVI" + String(average_uv_intensity) + ">TEM" + String(average_temprature)
-                  + "<HUM" + String(average_humidity) + ":";
-                  
-   char virtualWireBuffer[parameterDetails.length()];
-   
-   parameterDetails.toCharArray(virtualWireBuffer,parameterDetails.length());
-   
-  vw_send (virtualWireBuffer, parameterDetails.length()); //send the values to the control room system through the virtual wire library, for the 433.3Mhz radio transiever
+  String parameterDetails = "PHV" + String(average_ph) + "?MOI" + String(average_moisture) 
+                + ";UVI" + String(average_uv_intensity) + ">TEM" + String(average_temprature)
+                + "<HUM" + String(average_humidity) + ":";
+                
+
+  Bluetooth.print(parameterDetails);
   
-  vw_wait_tx(); //wait until the whole message has been send
 
   #ifdef DEBUG
     Serial.println("Message sent to the receiver");
